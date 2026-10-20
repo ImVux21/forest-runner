@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Forest Runner — 3D Open-World Adventure & Time Trial</title>
+    <!-- CrazyGames SDK v3 -->
+    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-panel: rgba(12, 8, 22, 0.94);
+        --bg-panel-dark: rgba(6, 4, 14, 0.98);
+        --accent-curse: #a855f7;
+        --accent-curse-glow: rgba(168, 85, 247, 0.55);
+        --border-curse: rgba(168, 85, 247, 0.45);
+        --accent-gold: #fbbf24;
+        --border-gold: rgba(251, 191, 36, 0.5);
+        --text-parchment: #e8d5b7;
+        --text-gold: #fef08a;
+        --danger-blood: #ef4444;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        touch-action: none;
+        background: #0d0a1a;
+        font-family: 'Cinzel', 'Lora', serif;
+        user-select: none;
+      }
+      #canvas-container {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      canvas { display: block; }
+
+      /* ─── High-Velocity Speed Lines Canvas ───────────────────────────── */
+      #speed-lines-canvas {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 6;
+      }
+
+      /* ─── Streak Fire Vignette Overlay ───────────────────────────────── */
+      #streak-vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 60, 0, 0.4) 100%);
+      }
+      #streak-vignette.active {
+        opacity: 1;
+        animation: flamePulse 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes flamePulse {
+        from { background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 60, 0, 0.35) 100%); }
+        to { background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 120, 0, 0.6) 100%); }
+      }
+
+      /* ─── Eerie Nightfall Curse Vignette Overlay ─────────────────────── */
+      #night-curse-vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 1.5s ease;
+        background: radial-gradient(ellipse at center, transparent 62%, rgba(68, 10, 102, 0.22) 86%, rgba(120, 15, 45, 0.40) 100%);
+      }
+      #night-curse-vignette.active {
+        opacity: 0.65;
+        animation: cursePulse 2.8s ease-in-out infinite alternate;
+      }
+      @keyframes cursePulse {
+        from { opacity: 0.25; }
+        to { opacity: 0.60; }
+      }
+
+      /* ─── 3D Skyrim-Style Dark Fantasy Compass Bar ────────────────────── */
+      #compass-container {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 340px;
+        height: 38px;
+        background: linear-gradient(180deg, rgba(16, 12, 28, 0.92) 0%, rgba(8, 6, 18, 0.98) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1.5px solid var(--border-gold);
+        border-radius: 20px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 12;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.7), inset 0 1px 2px rgba(251, 191, 36, 0.3);
+      }
+
+      #compass-needle {
+        position: absolute;
+        top: 0; bottom: 0;
+        width: 2px;
+        background: var(--accent-gold);
+        z-index: 2;
+        box-shadow: 0 0 10px var(--accent-gold);
+      }
+
+      #compass-tape {
+        width: 100%;
+        overflow: hidden;
+        position: relative;
+        height: 100%;
+        display: flex;
+        align-items: center;
+      }
+
+      #compass-strip {
+        display: flex;
+        gap: 28px;
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: var(--text-parchment);
+        transition: transform 0.05s linear;
+        white-space: nowrap;
+        padding-left: 150px;
+      }
+
+      .compass-point { color: var(--accent-gold); font-size: 1.05rem; font-family: 'Cinzel', serif; }
+
+      /* ─── Top HUD ─────────────────────────────────────────────────────── */
+      #hud {
+        position: absolute;
+        top: 14px; left: 18px; right: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .hud-group {
+        display: flex;
+        gap: 10px;
+        pointer-events: auto;
+      }
+
+      .hud-panel {
+        background: linear-gradient(135deg, rgba(18, 12, 30, 0.92) 0%, rgba(8, 6, 18, 0.97) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 18px;
+        padding: 8px 18px;
+        color: var(--text-parchment);
+        border: 1.5px solid var(--border-gold);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(251, 191, 36, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: border-color 0.4s ease, box-shadow 0.4s ease;
+      }
+
+      #celestial-panel.night-warning {
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.75) !important;
+        animation: celestialPulse 1.2s infinite alternate;
+      }
+      @keyframes celestialPulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.04); }
+      }
+
+      .hud-icon { font-size: 1.6rem; }
+      .hud-info { display: flex; flex-direction: column; }
+      .hud-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        font-weight: 700;
+        font-family: 'Cinzel', serif;
+        color: #d8b4fe;
+      }
+
+      #score-display { font-size: 1.5rem; font-weight: 800; color: #fff; font-family: 'Cinzel', serif; }
+      #coins-display { font-size: 1.5rem; font-weight: 800; color: var(--accent-gold); font-family: 'Cinzel', serif; }
+
+
+      /* ─── Time Trial Arcade HUD Bar ──────────────────────────────────── */
+      #time-trial-hud {
+        position: absolute;
+        top: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+        align-items: center;
+        gap: 14px;
+        background: rgba(18, 24, 38, 0.85);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 2px solid rgba(255, 215, 0, 0.45);
+        border-radius: 24px;
+        padding: 8px 22px;
+        z-index: 14;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 20px rgba(255, 165, 0, 0.3);
+      }
+
+      .tt-timer-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 90px;
+      }
+      .tt-timer-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #ffd700;
+      }
+      #tt-timer-display {
+        font-size: 1.8rem;
+        font-weight: 900;
+        color: #ffd700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .pulse-fast {
+        animation: pulseWarning 0.4s infinite alternate;
+      }
+      @keyframes pulseWarning {
+        from { transform: scale(1); }
+        to { transform: scale(1.15); filter: drop-shadow(0 0 10px #ff3b30); }
+      }
+
+      .tt-streak-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 6px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      #tt-streak-display {
+        font-size: 1.05rem;
+        font-weight: 900;
+        color: #ff9100;
+        letter-spacing: 0.5px;
+      }
+      #tt-multiplier-tag {
+        background: linear-gradient(135deg, #ff4081, #f50057);
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 900;
+        box-shadow: 0 2px 8px rgba(245, 0, 87, 0.5);
+      }
+
+      #tt-timer-bar-wrap {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      #tt-timer-bar {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(90deg, #ffd700, #ff9100, #ff3d00);
+        transition: width 0.1s linear;
+      }
+
+      /* ─── Active Quests & Daily Challenge Widget ─────────────────────── */
+      #quest-widget {
+        position: absolute;
+        top: 80px;
+        left: 18px;
+        background: linear-gradient(135deg, rgba(16, 12, 28, 0.94) 0%, rgba(8, 6, 18, 0.98) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 2px solid var(--border-curse);
+        border-radius: 20px;
+        padding: 14px 18px;
+        color: var(--text-parchment);
+        z-index: 10;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 20px rgba(168, 85, 247, 0.25);
+        max-width: 290px;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+      }
+
+      #quest-widget h3 {
+        font-family: 'Cinzel', serif;
+        font-size: 0.88rem;
+        color: var(--accent-gold);
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      }
+
+      .quest-item {
+        font-family: 'Lora', serif;
+        font-size: 0.82rem;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        color: #e9d5ff;
+        font-weight: 500;
+      }
+      .quest-val { font-weight: 800; color: var(--accent-gold); font-family: 'Cinzel', serif; }
+
+      /* ─── 🗺️ Mystical Minimap (Bản Đồ Tiên Tri) ───────────────────────── */
+      #minimap-container {
+        position: absolute;
+        bottom: 24px;
+        right: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        z-index: 16;
+        pointer-events: none;
+      }
+      #minimap-frame {
+        position: relative;
+        width: 128px;
+        height: 128px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2.5px solid var(--accent-gold);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 18px rgba(168, 85, 247, 0.45);
+        background: #090614;
+      }
+      #minimap-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #minimap-label {
+        font-family: 'Cinzel', serif;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        color: var(--accent-gold);
+        margin-top: 6px;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.95);
+      }
+
+
+      /* Daily Challenge Section */
+      #daily-challenge-box {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      #daily-challenge-box h4 {
+        font-size: 0.75rem;
+        color: #ff9100;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .daily-desc {
+        font-size: 0.72rem;
+        color: #d1fae5;
+        margin: 4px 0 6px 0;
+      }
+      .daily-progress-wrap {
+        width: 100%;
+        height: 7px;
+        background: rgba(0, 0, 0, 0.35);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      #daily-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #10b981, #34d399);
+        transition: width 0.3s ease;
+      }
+      .daily-footer {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.65rem;
+        color: #a7f3d0;
+        margin-top: 4px;
+        font-weight: 700;
+      }
+
+      /* ─── Controls Guidance Bar ───────────────────────────────────────── */
+      #controls-hint {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .control-key {
+        background: rgba(14, 38, 18, 0.75);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 12px;
+        padding: 5px 12px;
+        color: #e2f8dc;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      /* ─── On-Screen Touch Controls (Hidden on PC/Mouse displays) ─────── */
+      #on-screen-controls {
+        position: absolute;
+        bottom: 24px;
+        left: 0;
+        right: 0;
+        padding: 0 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        pointer-events: none;
+        z-index: 15;
+      }
+
+      @media (pointer: fine) and (min-width: 768px) {
+        #on-screen-controls {
+          display: none !important;
+        }
+      }
+
+      .control-cluster {
+        display: flex;
+        gap: 12px;
+        pointer-events: auto;
+      }
+
+      .touch-btn {
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(18, 52, 24, 0.8);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        color: #fff;
+        border-radius: 18px;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        transition: transform 0.08s ease, background 0.08s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .touch-btn:hover { background: rgba(28, 78, 38, 0.88); }
+      .touch-btn:active, .touch-btn.active {
+        transform: translateY(3px) scale(0.95);
+        background: rgba(48, 120, 60, 0.95);
+      }
+
+      .touch-jump-btn {
+        width: 80px; height: 80px;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(243, 156, 18, 0.95) 0%, rgba(211, 84, 0, 0.95) 100%);
+      }
+
+      .touch-action-btn {
+        width: 60px; height: 60px;
+        border-radius: 18px;
+        background: rgba(41, 128, 185, 0.85);
+      }
+
+      /* ─── Full-Screen Dark Gothic Start Portal ───────────────────────── */
+      #screen-start {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: radial-gradient(circle at center, rgba(24, 14, 44, 0.92) 0%, rgba(8, 4, 16, 0.98) 75%, #05020a 100%);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        z-index: 30;
+        padding: 24px;
+        text-align: center;
+      }
+      #screen-start.hidden { display: none; }
+
+      .start-gothic-wrapper {
+        max-width: 760px;
+        width: 95%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        animation: fadeInGothic 1s ease-out;
+      }
+      @keyframes fadeInGothic {
+        from { opacity: 0; transform: translateY(20px) scale(0.97); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .gothic-emblem {
+        font-size: 2.2rem;
+        margin-bottom: 8px;
+        filter: drop-shadow(0 0 14px rgba(251, 191, 36, 0.6));
+      }
+
+      .gothic-title {
+        font-family: 'Cinzel Decorative', 'Cinzel', serif;
+        font-size: 3.2rem;
+        font-weight: 900;
+        background: linear-gradient(180deg, #fff7b2 0%, #ffd043 50%, #d97706 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: 3px;
+        text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        line-height: 1.1;
+      }
+
+      .gothic-subtitle {
+        font-family: 'Cinzel', serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #d8b4fe;
+        letter-spacing: 4px;
+        margin: 8px 0 18px 0;
+        text-shadow: 0 0 16px rgba(168, 85, 247, 0.6);
+      }
+
+      .gothic-story-box {
+        background: rgba(10, 6, 20, 0.75);
+        border: 1px solid var(--border-curse);
+        border-radius: 16px;
+        padding: 16px 24px;
+        margin-bottom: 24px;
+        max-width: 650px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(168, 85, 247, 0.15);
+      }
+
+      .gothic-lore {
+        font-family: 'Lora', serif;
+        font-style: italic;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--text-parchment);
+      }
+
+      .start-btn-row {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 16px 32px;
+        font-family: 'Cinzel', serif;
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: 1px;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      }
+      .btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.1); }
+      .btn-primary {
+        background: linear-gradient(180deg, #ffd700 0%, #d97706 100%);
+        color: #2b1300;
+        border: 1.5px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 10px 28px rgba(217, 119, 6, 0.6), 0 0 16px rgba(255, 215, 0, 0.4);
+      }
+      .btn-arcade {
+        background: linear-gradient(180deg, #c084fc 0%, #7e22ce 100%);
+        color: #fff;
+        border: 1.5px solid rgba(255, 255, 255, 0.35);
+        box-shadow: 0 10px 28px rgba(126, 34, 206, 0.6), 0 0 16px rgba(192, 132, 252, 0.4);
+      }
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-parchment);
+        border: 1.5px solid var(--border-gold);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      }
+
+      .gothic-controls-note {
+        margin-top: 24px;
+        font-family: 'Cinzel', serif;
+        font-size: 0.8rem;
+        color: #a78bfa;
+        letter-spacing: 1px;
+      }
+
+      .pulse-glow {
+        animation: pulseGlow 2s infinite alternate;
+      }
+      @keyframes pulseGlow {
+        from { box-shadow: 0 8px 24px rgba(217, 119, 6, 0.4); }
+        to { box-shadow: 0 14px 40px rgba(217, 119, 6, 0.9), 0 0 24px #ffd700; }
+      }
+
+
+      /* ─── Time Trial Summary Modal ───────────────────────────────────── */
+      #tt-summary-modal {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(6, 16, 26, 0.88);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        color: #fff;
+        text-align: center;
+        padding: 24px;
+        z-index: 50;
+      }
+      #tt-summary-modal.hidden { display: none; }
+
+      .summary-card {
+        background: linear-gradient(180deg, #1a2a3a 0%, #0e1724 100%);
+        border: 3px solid #ff9100;
+        border-radius: 28px;
+        padding: 28px 36px;
+        max-width: 480px;
+        width: 90%;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(255, 145, 0, 0.35);
+      }
+
+      .summary-stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin: 18px 0;
+      }
+      .summary-stat-item {
+        background: rgba(0, 0, 0, 0.4);
+        padding: 10px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .summary-stat-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #a0aec0;
+        font-weight: 700;
+      }
+      .summary-stat-val {
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #ffd700;
+        margin-top: 4px;
+      }
+
+      /* ─── Wardrobe Modal ─────────────────────────────────────────────── */
+      #wardrobe-modal {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(8, 20, 12, 0.88);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 45;
+        padding: 24px;
+      }
+      #wardrobe-modal.hidden { display: none; }
+
+      .wardrobe-card {
+        background: linear-gradient(180deg, #1f4227 0%, #132b19 100%);
+        border: 3px solid #58a834;
+        border-radius: 28px;
+        padding: 28px 36px;
+        max-width: 500px;
+        width: 92%;
+        text-align: center;
+        color: #fff;
+      }
+
+      .wardrobe-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        width: 100%;
+        margin: 16px 0 20px 0;
+      }
+      .skin-card {
+        background: rgba(0, 0, 0, 0.35);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        padding: 12px;
+        cursor: pointer;
+        position: relative;
+        transition: border-color 0.2s, transform 0.1s;
+      }
+      .skin-card:hover { border-color: #ffd700; transform: scale(1.02); }
+      .skin-card.selected {
+        border-color: #ffd700;
+        background: rgba(255, 215, 0, 0.18);
+        box-shadow: 0 0 14px rgba(255, 215, 0, 0.35);
+      }
+      .skin-card.locked {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .skin-lock-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 8px;
+        padding: 2px 6px;
+        font-size: 0.65rem;
+        color: #ff9100;
+        font-weight: 800;
+      }
+
+      /* ─── Story Lore & 4 Biomes Guide Modal ──────────────────────────── */
+      #lore-modal {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(6, 4, 14, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        z-index: 55;
+        padding: 20px;
+      }
+      #lore-modal.hidden { display: none; }
+      .lore-card {
+        background: linear-gradient(180deg, #181028 0%, #0d0818 100%);
+        border: 2px solid var(--border-gold);
+        border-radius: 24px;
+        padding: 26px 32px;
+        max-width: 680px;
+        width: 95%;
+        max-height: 85vh;
+        overflow-y: auto;
+        color: var(--text-parchment);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(168, 85, 247, 0.35);
+      }
+      .lore-title {
+        font-family: 'Cinzel Decorative', 'Cinzel', serif;
+        font-size: 1.45rem;
+        color: var(--accent-gold);
+        text-align: center;
+        margin-bottom: 12px;
+        text-shadow: 0 0 16px rgba(251, 191, 36, 0.6);
+      }
+      .lore-section {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(251, 191, 36, 0.2);
+        border-radius: 14px;
+        padding: 14px 18px;
+        margin-bottom: 14px;
+      }
+      .lore-section h3 {
+        font-family: 'Cinzel', serif;
+        font-size: 1.02rem;
+        color: #fef08a;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .lore-section p {
+        font-family: 'Lora', serif;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        color: #e2e8f0;
+        margin: 0;
+      }
+      .lore-biome-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .lore-biome-item {
+        background: rgba(0, 0, 0, 0.4);
+        border-left: 3px solid var(--accent-gold);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+      }
+      .lore-biome-item strong {
+        color: var(--accent-gold);
+        display: block;
+        font-family: 'Cinzel', serif;
+        font-size: 0.86rem;
+        margin-bottom: 3px;
+      }
+
+      /* ─── Dark Fantasy Gothic Dialogue Box ───────────────────────────── */
+      #dialogue-box {
+        position: absolute;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 92%;
+        max-width: 660px;
+        background: linear-gradient(180deg, rgba(18, 12, 32, 0.96) 0%, rgba(8, 4, 16, 0.98) 100%);
+        border: 2px solid var(--border-gold);
+        border-radius: 20px;
+        padding: 20px 26px;
+        box-shadow: 0 16px 45px rgba(0, 0, 0, 0.8), 0 0 24px rgba(168, 85, 247, 0.35);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        color: var(--text-parchment);
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #dialogue-box.hidden { display: none; }
+      .dialogue-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-bottom: 1px solid rgba(251, 191, 36, 0.25);
+        padding-bottom: 10px;
+      }
+      #dialogue-avatar {
+        font-size: 2.2rem;
+        background: rgba(168, 85, 247, 0.15);
+        border: 1.5px solid var(--border-curse);
+        border-radius: 50%;
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+      }
+      #dialogue-speaker {
+        font-family: 'Cinzel', serif;
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--accent-gold);
+        letter-spacing: 1.5px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      }
+      #dialogue-text {
+        font-family: 'Lora', serif;
+        font-style: italic;
+        font-size: 1.05rem;
+        line-height: 1.65;
+        color: var(--text-parchment);
+        min-height: 52px;
+      }
+      #dialogue-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+      .dialogue-choice-btn {
+        font-family: 'Lora', serif;
+        background: rgba(168, 85, 247, 0.08);
+        border: 1.5px solid var(--border-curse);
+        border-radius: 12px;
+        padding: 12px 18px;
+        color: #f3e8ff;
+        font-size: 0.98rem;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .dialogue-choice-btn:hover {
+        background: rgba(168, 85, 247, 0.25);
+        border-color: #c084fc;
+        color: #fff;
+        transform: translateX(6px);
+        box-shadow: 0 0 14px rgba(168, 85, 247, 0.4);
+      }
+      #dialogue-advance {
+        align-self: flex-end;
+        background: linear-gradient(180deg, #ffd700 0%, #d97706 100%);
+        color: #2b1300;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 20px;
+        padding: 9px 22px;
+        font-family: 'Cinzel', serif;
+        font-weight: 800;
+        font-size: 0.92rem;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(217, 119, 6, 0.5);
+        transition: transform 0.1s ease, filter 0.1s ease;
+      }
+      #dialogue-advance:hover { filter: brightness(1.15); transform: scale(1.04); }
+
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container">
+      <!-- Speed Lines Canvas -->
+      <canvas id="speed-lines-canvas"></canvas>
+
+      <!-- Streak Fire Vignette -->
+      <div id="streak-vignette"></div>
+
+      <!-- Eerie Nightfall Curse Vignette Overlay -->
+      <div id="night-curse-vignette"></div>
+
+      <!-- 3D Skyrim Compass Tape -->
+      <div id="compass-container">
+        <div id="compass-needle"></div>
+        <div id="compass-tape">
+          <div id="compass-strip">
+            <span class="compass-point">N</span> <span>·</span> <span>15</span> <span>·</span>
+            <span>NE</span> <span>·</span> <span>60</span> <span>·</span>
+            <span class="compass-point">E</span> <span>·</span> <span>105</span> <span>·</span>
+            <span>SE</span> <span>·</span> <span>150</span> <span>·</span>
+            <span class="compass-point">S</span> <span>·</span> <span>195</span> <span>·</span>
+            <span>SW</span> <span>·</span> <span>240</span> <span>·</span>
+            <span class="compass-point">W</span> <span>·</span> <span>285</span> <span>·</span>
+            <span>NW</span> <span>·</span> <span>330</span> <span>·</span>
+            <span class="compass-point">N</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top HUD -->
+      <div id="hud">
+        <div class="hud-group">
+          <!-- Score -->
+          <div class="hud-panel">
+            <span class="hud-icon">🏆</span>
+            <div class="hud-info">
+              <span class="hud-label">Score</span>
+              <span id="score-display">0</span>
+            </div>
+          </div>
+
+          <!-- Coins -->
+          <div class="hud-panel">
+            <span class="hud-icon">🪙</span>
+            <div class="hud-info">
+              <span class="hud-label">Coins</span>
+              <span id="coins-display">0</span>
+            </div>
+          </div>
+
+          <!-- Celestial Day/Night Clock & Curse Meter -->
+          <div class="hud-panel" id="celestial-panel">
+            <span class="hud-icon" id="celestial-icon">☀️</span>
+            <div class="hud-info">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+                <span class="hud-label" id="celestial-phase">Ban Ngày</span>
+                <span id="celestial-time" style="font-size: 1.15rem; font-weight: 800; color: #ffd700; font-family: 'Cinzel', serif;">12:00</span>
+              </div>
+              <div id="curse-meter-wrap" style="width: 100px; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; margin-top: 3px; border: 1px solid rgba(168, 85, 247, 0.4);">
+                <div id="curse-progress-fill" style="height: 100%; width: 10%; background: linear-gradient(90deg, #a855f7, #ef4444); transition: width 0.5s ease;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-group">
+          <!-- Wardrobe Button -->
+          <button class="touch-btn" id="btn-open-wardrobe" style="padding: 8px 16px; border-radius: 18px; flex-direction: row; gap: 6px; font-family: 'Cinzel', serif;">
+            <span style="font-size: 1.3rem;">👕</span>
+            <span style="font-size: 0.85rem; font-weight: 800;">Wardrobe</span>
+          </button>
+
+          <!-- Elevation -->
+          <div class="hud-panel" style="min-width: 130px;">
+            <div class="hud-info" style="width: 100%;">
+              <span class="hud-label">Elevation</span>
+              <div style="width: 100%; height: 9px; background: rgba(0,0,0,0.4); border-radius: 6px; overflow: hidden; margin-top: 4px; border: 1px solid rgba(255,255,255,0.1);">
+                <div id="speed-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #48bb78, #ecc94b, #9f7aea);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Trial Arcade HUD -->
+      <div id="time-trial-hud">
+        <div class="tt-timer-box">
+          <span class="tt-timer-label">⏱ TIME LEFT</span>
+          <span id="tt-timer-display">1:15.0</span>
+          <div id="tt-timer-bar-wrap">
+            <div id="tt-timer-bar"></div>
+          </div>
+        </div>
+
+        <div class="tt-streak-box">
+          <span id="tt-streak-display">🔥 STREAK 0</span>
+          <span id="tt-multiplier-tag" style="display: none;">x1</span>
+        </div>
+
+        <div class="hud-info" style="min-width: 80px;">
+          <span class="hud-label" style="color: #ffd700;">Round Score</span>
+          <span id="tt-score-display" style="font-size: 1.3rem; font-weight: 900; color: #fff;">0</span>
+        </div>
+      </div>
+
+      <!-- Active Quests & Daily Challenge Widget (Sứ Mệnh Lời Nguyền) -->
+      <div id="quest-widget">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h3 id="quest-header-title">📜 ANCIENT MISSION</h3>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-hud-lore" style="background: rgba(251, 191, 36, 0.18); border: 1px solid var(--border-gold); color: var(--accent-gold); border-radius: 8px; padding: 3px 8px; font-size: 0.72rem; font-family: 'Cinzel', serif; font-weight: 700; cursor: pointer; pointer-events: auto;">📖 Lore & Map</button>
+            <button id="btn-toggle-quest" style="background: none; border: none; color: var(--accent-gold); cursor: pointer; font-size: 0.8rem; pointer-events: auto;">▼</button>
+          </div>
+        </div>
+        <div id="quest-content">
+          <div class="quest-item">
+            <span>🪙 Forest Emeralds:</span>
+            <span class="quest-val" id="quest-coins">0 / 15</span>
+          </div>
+          <div class="quest-item">
+            <span>👑 Ancient Chests:</span>
+            <span class="quest-val" id="quest-chests">0 / 2</span>
+          </div>
+          <div class="quest-item">
+            <span>🏔️ Conquer Peak:</span>
+            <span class="quest-val" id="quest-peak">Incomplete</span>
+          </div>
+
+          <!-- Daily Challenge Widget -->
+          <div id="daily-challenge-box">
+            <h4>
+              <span>⭐ DAILY CHALLENGE</span>
+              <span id="daily-countdown" style="font-size: 0.65rem; color: #a7f3d0;">23:59:59</span>
+            </h4>
+            <div class="daily-desc" id="daily-desc">Collect 25 coins in the valley</div>
+            <div class="daily-progress-wrap">
+              <div id="daily-progress-fill"></div>
+            </div>
+            <div class="daily-footer">
+              <span id="daily-count-text">0 / 25</span>
+              <span id="daily-reward-text">🎁 +100 🪙</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🗺️ Mystical Minimap (Bản Đồ Tiên Tri) -->
+      <div id="minimap-container">
+        <div id="minimap-frame">
+          <canvas id="minimap-canvas" width="128" height="128"></canvas>
+        </div>
+        <div id="minimap-label">VALLEY RADAR</div>
+      </div>
+
+      <!-- Controls Guidance Bar -->
+      <div id="controls-hint">
+        <div class="control-key"><span>🎮 WASD</span> Move</div>
+        <div class="control-key"><span>⚡ Shift</span> Sprint</div>
+        <div class="control-key"><span>🪂 Space</span> Glider</div>
+        <div class="control-key"><span>💬 E</span> Talk</div>
+        <div class="control-key"><span>🖱️ Drag</span> Orbit Cam</div>
+      </div>
+
+      <!-- On-Screen Controls for Mobile/Touch -->
+      <div id="on-screen-controls">
+        <div class="control-cluster" style="display: grid; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px; gap: 6px;">
+          <div></div>
+          <button class="touch-btn" id="btn-control-up" style="width: 56px; height: 56px;">▲</button>
+          <div></div>
+
+          <button class="touch-btn" id="btn-control-left" style="width: 56px; height: 56px;">◀</button>
+          <button class="touch-btn" id="btn-control-down" style="width: 56px; height: 56px;">▼</button>
+          <button class="touch-btn" id="btn-control-right" style="width: 56px; height: 56px;">▶</button>
+        </div>
+
+        <div class="control-cluster" style="display: flex; gap: 8px; align-items: flex-end;">
+          <button class="touch-btn touch-action-btn" id="btn-control-talk" style="background: rgba(168, 85, 247, 0.85); font-size: 0.72rem; display: none;">💬 Talk [E]</button>
+          <button class="touch-btn touch-action-btn" id="btn-control-sprint">⚡ Sprint</button>
+          <button class="touch-btn touch-action-btn" id="btn-control-glider">🪂 Glide</button>
+          <button class="touch-btn" id="btn-control-rot-left" style="width: 52px; height: 52px; border-radius: 50%;">↺</button>
+          <button class="touch-btn" id="btn-control-rot-right" style="width: 52px; height: 52px; border-radius: 50%;">↻</button>
+          <button class="touch-btn touch-jump-btn" id="btn-control-jump">JUMP</button>
+        </div>
+      </div>
+
+      <!-- Dialogue Box -->
+      <div id="dialogue-box" class="hidden">
+        <div class="dialogue-header">
+          <div id="dialogue-avatar">🧙‍♂️</div>
+          <div id="dialogue-speaker">NPC Name</div>
+        </div>
+        <div id="dialogue-text">...</div>
+        <div id="dialogue-choices"></div>
+        <button id="dialogue-advance">Continue [E] ▶</button>
+      </div>
+
+      <!-- Full-Screen Dark Gothic Start Portal -->
+      <div id="screen-start">
+        <div class="start-gothic-wrapper">
+          <div class="gothic-emblem">⚔️ 🌲 ⚔️</div>
+          <h1 class="gothic-title">FOREST RUNNER</h1>
+          <h2 class="gothic-subtitle">NIGHTFALL SURVIVAL · SHADOWS OF ELDORIA</h2>
+
+          <div class="gothic-story-box">
+            <p class="gothic-lore">
+              "The Emerald Heart of the Forest shattered during last night's shadow storm... Its sacred shards are scattered across four realms: Oakvale Village (West), Dragon Fortress (East), Forbidden Forest (North), and the Murky Swamp (South). Deploy your Falcon Glider, soar across chasms, and awaken the Forest Spirit before the Night Curse takes hold!"
+            </p>
+          </div>
+
+          <div class="start-btn-row">
+            <button class="btn btn-primary pulse-glow" id="btn-start">▶ ENTER ELDORIA</button>
+            <button class="btn btn-secondary" id="btn-open-lore">📜 LORE & REALMS</button>
+            <button class="btn btn-arcade" id="btn-start-tt">⏱ TIME TRIAL SPRINT</button>
+            <button class="btn btn-secondary" id="btn-start-wardrobe">👕 WARDROBE SKINS</button>
+          </div>
+
+          <div class="gothic-controls-note">
+            <span>🎮 WASD: Move</span> · <span>⚡ Shift: Sprint</span> · <span>🪂 Space: Glider</span> · <span>💬 E: Interact</span>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Time Trial Round Summary Modal -->
+      <div id="tt-summary-modal" class="hidden">
+        <div class="summary-card">
+          <h2 style="font-size: 2.2rem; color: #ff9100; font-weight: 900;">ROUND COMPLETE!</h2>
+          <div id="tt-summary-record" style="display: none; background: #ff4081; color: #fff; font-weight: 900; padding: 4px 12px; border-radius: 12px; margin: 8px auto; width: fit-content;">🏆 NEW RECORD!</div>
+
+          <div class="summary-stat-grid">
+            <div class="summary-stat-item">
+              <div class="summary-stat-label">Final Score</div>
+              <div class="summary-stat-val" id="tt-summary-score">0</div>
+            </div>
+            <div class="summary-stat-item">
+              <div class="summary-stat-label">Coins Earned</div>
+              <div class="summary-stat-val" id="tt-summary-coins">+0</div>
+            </div>
+            <div class="summary-stat-item">
+              <div class="summary-stat-label">Best Streak</div>
+              <div class="summary-stat-val" id="tt-summary-streak">x1</div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+            <button class="btn btn-arcade" id="btn-tt-replay">⏱ PLAY AGAIN</button>
+            <button class="btn btn-primary" id="btn-tt-double">🎁 2X COINS (WATCH AD)</button>
+            <button class="btn btn-secondary" id="btn-tt-freeroam">🌲 FREE ROAM VALLEY</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wardrobe Skin Modal -->
+      <div id="wardrobe-modal" class="hidden">
+        <div class="wardrobe-card">
+          <h2 style="font-size: 2.2rem; font-weight: 900; margin-bottom: 6px;">👕 ADVENTURER WARDROBE</h2>
+          <p style="font-size: 0.9rem; color: #c9f2c2;">Choose your explorer outfit (unlock more via Daily Quests!):</p>
+
+          <div class="wardrobe-grid">
+            <div class="skin-card selected" data-skin="blue">
+              <div style="font-size: 2rem;">🔵</div>
+              <div style="font-weight: 800; margin-top: 4px;">Hero Blue</div>
+              <div style="font-size: 0.75rem; color: #a8e6a2;">Classic Explorer</div>
+            </div>
+            <div class="skin-card" data-skin="knight">
+              <span class="skin-lock-badge" id="badge-skin-knight">LOCKED</span>
+              <div style="font-size: 2rem;">🟢</div>
+              <div style="font-weight: 800; margin-top: 4px;">Forest Knight</div>
+              <div style="font-size: 0.75rem; color: #a8e6a2;">Verdant Champion</div>
+            </div>
+            <div class="skin-card" data-skin="mage">
+              <span class="skin-lock-badge" id="badge-skin-mage">LOCKED</span>
+              <div style="font-size: 2rem;">🟣</div>
+              <div style="font-weight: 800; margin-top: 4px;">Shadow Mage</div>
+              <div style="font-size: 0.75rem; color: #a8e6a2;">Arcane Wanderer</div>
+            </div>
+            <div class="skin-card" data-skin="crimson">
+              <span class="skin-lock-badge" id="badge-skin-crimson">LOCKED</span>
+              <div style="font-size: 2rem;">🔴</div>
+              <div style="font-weight: 800; margin-top: 4px;">Crimson Hunter</div>
+              <div style="font-size: 0.75rem; color: #a8e6a2;">Fire Summit Tracker</div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-close-wardrobe">CONFIRM & CLOSE</button>
+        </div>
+      </div>
+
+      <!-- Story Lore & Biome Guide Modal -->
+      <div id="lore-modal" class="hidden">
+        <div class="lore-card">
+          <h2 class="lore-title">⚔️ LEGENDS & MAP OF ELDORIA 🌲</h2>
+          
+          <div class="lore-section">
+            <h3>🔮 THE DARK CURSE & SACRED EMERALDS</h3>
+            <p>
+              The ancient realm of Eldoria was long guarded by the sacred Emerald Heart of the Forest. But last night, an ancient Dark Curse awakened, shattering the jewel into emerald shards scattered across the four winds. As midnight deepens, deadly violet mist will rise and claim the forest unless all sacred gems are gathered and the Forest Spirit is awakened!
+            </p>
+          </div>
+
+          <div class="lore-section">
+            <h3>🗺️ 4 CORE REALMS & 4 EXPANSION OUTLANDS (180M x 180M)</h3>
+            <p>From the central crossroads signpost in the valley, ancient cobblestone trails lead outward in all directions:</p>
+            <div class="lore-biome-grid">
+              <div class="lore-biome-item">
+                <strong>🏡 West: Oakvale Village (-60m)</strong>
+                A peaceful farming hamlet with stone wells, cozy cottages, and windmills.
+              </div>
+              <div class="lore-biome-item">
+                <strong>🏰 East: Dragon Fortress (+70m)</strong>
+                The Black Dragon perches atop a sheer 22m volcanic fortress rock.
+              </div>
+              <div class="lore-biome-item">
+                <strong>🔮 North: Forbidden Forest (+60m)</strong>
+                Arcane violet light pillars, domain of the ancient King Alpaking and spectres.
+              </div>
+              <div class="lore-biome-item">
+                <strong>💀 South: Murky Demon Swamp (-60m)</strong>
+                A shadowy marsh shrouded in gloom, lair of the Demon, Yeti, and Orcs.
+              </div>
+              <div class="lore-biome-item">
+                <strong>❄️ Northwest: Frostfall Sanctuary (-48m, +44m)</strong>
+                An ancient icy lighthouse and radiant sapphire crystals gleaming in the tundra frost.
+              </div>
+              <div class="lore-biome-item">
+                <strong>🌋 Northeast: Molten Crags (+48m, +45m)</strong>
+                Fractured basalt columns, lava fissures, and gleaming fire ruby veins.
+              </div>
+              <div class="lore-biome-item">
+                <strong>🍄 Southwest: Elder Shroomwood (-48m, -48m)</strong>
+                Colossal 3.2m glowing canopy mushrooms releasing mystical bioluminescent spores.
+              </div>
+              <div class="lore-biome-item">
+                <strong>☀️ Southeast: Sun Temple Ruins (+48m, -48m)</strong>
+                An ancient golden marble sanctuary built to honor celestial daylight.
+              </div>
+            </div>
+          </div>
+
+          <div class="lore-section">
+            <h3>☁️ CELESTIAL SKY ISLANDS (ALTITUDE 14M - 18M)</h3>
+            <p>Explore 3 mystical islands floating amidst the clouds above the kingdom:</p>
+            <div style="font-size: 0.85rem; line-height: 1.55; color: #cbd5e1; margin-top: 6px;">
+              <div>• <strong>Celestial Sky Temple (y = 16m):</strong> Central floating island surrounded by 4 stone monoliths and the rotating Archon Crystal.</div>
+              <div>• <strong>Falcon Crest Roost (y = 14.5m):</strong> Northwest aerial observation platform offering a panoramic vista over Oakvale Village.</div>
+              <div>• <strong>Dragon Blood Aerie (y = 18m):</strong> High-altitude basalt island hovering above the eastern volcano with eternal sacred flame.</div>
+            </div>
+          </div>
+
+          <div class="lore-section">
+            <h3>🪂 AERIAL NAVIGATION & SURVIVAL GUIDE</h3>
+            <div style="font-size: 0.88rem; line-height: 1.6; color: #cbd5e1;">
+              <div>• <strong>🌪️ Updraft Thermal Vents:</strong> Step into glowing cyan wind vortexes (at Peak Summit 18, 22 or Crossroads 0, -8) to get <strong>catapulted 18m - 22m into the skies</strong>!</div>
+              <div>• <strong>🪂 Falcon Glider:</strong> While airborne, <strong>HOLD SPACE</strong> to deploy your glider and soar effortlessly across chasms.</div>
+              <div>• <strong>⭕ Aerial Wind Boost Rings:</strong> Glide through glowing golden rings suspended between islands for an <strong>instant aerial speed boost</strong>!</div>
+              <div>• <strong>🍄 Spring Mushrooms:</strong> Step on red spotted mushrooms on the ground to launch yourself onto high plateaus.</div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 18px;">
+            <button class="btn btn-primary pulse-glow" id="btn-close-lore">UNDERSTOOD · BEGIN ADVENTURE ▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
